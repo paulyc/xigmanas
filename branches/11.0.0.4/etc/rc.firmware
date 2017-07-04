@@ -1,0 +1,513 @@
+#!/bin/sh
+#
+# /etc/rc.firmware
+#
+# Part of NAS4Free (http://www.nas4free.org).
+# Copyright (c) 2012-2017 The NAS4Free Project <info@nas4free.org>.
+# All rights reserved.
+#
+
+# Script usage: rc.firmware <args> [<file>]
+# Where <args> can take the following values:
+# - enable: Create a 320MB ram drive in ${FTMP}
+# - disable: Erase ram drive
+# - upgrade <file> : Do an embedded release (IMG file) upgrade using the file <file>
+# - fullupgrade <file> : Do a full release (TGZ file) upgrade using the file <file>
+#
+
+SIZE="320M"
+PLATFORM=`cat /etc/platform`
+XARCH=`/bin/echo ${PLATFORM} | sed -e 's/-.*//'`
+ARCH=`/usr/bin/uname -m`
+CFDEVICE=`cat /etc/cfdevice`
+SKIP=`expr \( 1 \* 1024 \* 1024 \) / \( 32 \* 1024 \)`
+FTMP="/var/tmp/ftmp"
+ARG="$2"
+
+# Required for boot environment upgrade.
+ROOTFS=`mount | awk '/ \/ / {print $1}'`
+SYSBACKUP="/tmp/sysbackup"
+ZROOT="zroot"
+BENAME="upgrade"
+BEPATH="/var/tmp/be_upgrade"
+
+# Define some color codes for messages
+fmterror="\33[31m%s\33[0m\n"
+fmtsuccess="\33[37m%s\33[0m\n"
+fmtskipped="\33[33m%s\33[0m\n"
+fmtexecute="\33[37m%s\33[0m\n"
+
+enable_upgrade() {
+	# Redirect I/O to console.
+	# Prevent console redirect if no physical video adapter found.
+	if /usr/sbin/pciconf -l | grep -qw "vgapci[0-9]"; then
+		exec </dev/console >/dev/console 2>/dev/console
+	fi
+
+	# Create efficient memory file system.
+	if ! df | grep -qw ${FTMP}; then
+		/sbin/mount -t tmpfs -o size=${SIZE},mode=1777 tmpfs ${FTMP} > /dev/null 2>&1
+		if [ 0 != $? ]; then
+			msg="ERROR: Failed to create in-memory file system."
+			printf "\n\33[31m%s\33[0m\n" "${msg}"
+			/usr/bin/logger "UPGRADE ${msg}"
+			exit 1
+		fi
+	fi
+}
+
+disable_upgrade() {
+	# Redirect I/O to console.
+	# Prevent console redirect if no physical video adapter found.
+	if /usr/sbin/pciconf -l | grep -qw "vgapci[0-9]"; then
+		exec </dev/console >/dev/console 2>/dev/console
+	fi
+
+	# Get the md device.
+	mdid=`/sbin/mount -p | /usr/bin/grep ${FTMP} | /usr/bin/awk '{print $1}'`
+
+	# Umount in-memory file system.
+	if df | grep -qw ${FTMP}; then
+		/sbin/umount -f ${FTMP} > /dev/null 2>&1
+		if [ 0 != $? ]; then
+			msg="ERROR: Failed to umount in-memory file system."
+			printf "\n\33[31m%s\33[0m\n" "${msg}"
+			/usr/bin/logger "UPGRADE ${msg}"
+			exit 1
+		fi
+	fi
+}
+
+embedded_upgrade() {
+	# Wait 5 seconds before beginning
+	sleep 5
+
+	# Redirect I/O to console.
+	# Prevent console redirect if no physical video adapter found.
+	if /usr/sbin/pciconf -l | grep -qw "vgapci[0-9]"; then
+		exec </dev/console >/dev/console 2>/dev/console
+	fi
+
+	printf "\n\n\33[37m%s\33[0m\n" "Firmware upgrade in progress. Please wait..."
+
+	# Check if firmware file exists
+	if [ ! -r "${ARG}" ]; then
+		msg="ERROR: Firmware file does not exist."
+		printf "\n\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	fi
+
+	# Test firmware file
+	topic="Testing firmware file."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	/usr/bin/xz -t "${ARG}" 2>&1
+	if [ 0 != $? ]; then
+		msg="ERROR: Firmware file is corrupted."
+		printf "\n\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	else
+		printf "${fmtsuccess}" "SUCCESS: ${topic}"
+	fi
+
+	# Backup config
+	mkdir /tmp/configbak
+	# Get current config.xml file checksum info
+	CONFSUM=`sha256 /conf/config.xml | cut -d= -f2`
+
+	cp -p /conf/* /tmp/configbak
+
+	# Backup boot.config
+	topic="Backing up boot.config."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	if [ -f /cf/boot.config ]; then
+		cp -p /cf/boot.config /tmp/configbak
+		if [ $? -eq 1 ]; then
+			msg="ERROR: Backup configuration failed."
+			printf "\33[31m%s\33[0m\n" "${msg}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+		fi
+	else
+		printf "${fmtskipped}" "SKIPPED: ${topic}"
+	fi
+
+	# Backup loader.conf.local
+	topic="Backing up loader.conf.local."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	if [ -f /cf/boot/loader.conf.local ]; then
+		cp -p /cf/boot/loader.conf.local /tmp/configbak
+		if [ $? -eq 1 ]; then
+			msg="ERROR: Backup configuration failed."
+			printf "\33[31m%s\33[0m\n" "${msg}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+		fi
+	else
+		printf "${fmtskipped}" "SKIPPED: ${topic}"
+	fi
+
+	# Check config.xml file backup integrity
+	topic="Verifying checksum of config.xml."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	CONFSUM_BK=`sha256 /tmp/configbak/config.xml | cut -d= -f2`
+	if [ ! ${CONFSUM_BK} == ${CONFSUM} ]; then
+		msg="ERROR: Backup configuration corrupted."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		exit 1
+	else
+		printf "${fmtsuccess}" "SUCCESS: ${topic}"
+	fi
+
+	# Unmount /cf
+	topic="Unmounting /cf."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	/sbin/umount -f /cf
+	if [ 0 != $? ]; then # successfully?
+		msg="ERROR: Failed to umount '/cf'!"
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	else
+		printf "${fmtsuccess}" "SUCCESS: ${topic}"
+	fi
+
+	# dd image onto card
+	RESULT=1
+	if [ -r "${ARG}" ]; then
+		topic="Unpacking firmware and writing to destination."
+		printf "${fmtexecute}" "EXECUTING: ${topic}"
+		/usr/bin/xz -cdv "${ARG}" | /bin/dd of=/dev/${CFDEVICE} ibs=32k obs=32k skip=${SKIP} > /dev/null 2>&1
+		RESULT=$?
+		if [ 0 != ${RESULT} ]; then # successfully?
+			msg="ERROR: Failed to install firmware image on '/dev/${CFDEVICE}'!"
+			printf "\33[31m%s\33[0m\n" "${msg}"
+			/usr/bin/logger "UPGRADE ${msg}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+			# resize boot partition
+			topic="Resizing boot partition."
+			printf "${fmtexecute}" "EXECUTING: ${topic}"
+			/sbin/growfs -y /dev/${CFDEVICE} > /dev/null 2>&1
+			if [ 0 != $? ]; then
+				msg="ERROR: Failed partition resize!"
+				printf "\33[31m%s\33[0m\n" "${msg}"
+				/usr/bin/logger "UPGRADE ${msg}"
+				exit 1
+			else
+				printf "${fmtsuccess}" "SUCCESS: ${topic}"
+			fi
+		fi
+	fi
+
+	# Sync and wait 2 second after dd
+	topic="Syncing buffers."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	sync; sleep 2
+	printf "${fmtsuccess}" "SUCCESS: ${topic}"
+
+	# Mount /cf read-write
+	topic="Mounting /cf in read-write mode."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	/sbin/mount -w -o noatime /cf
+	if [ 0 != $? ]; then
+		printf "${fmterror}" "ERROR: ${topic}"
+		# Try force mount /cf read-write instead.
+		topic="Mounting /cf in forced read-write mode."
+		printf "${fmtexecute}" "EXECUTING: ${topic}"
+		/sbin/mount -f -w -o noatime /cf
+		if [ 0 != $? ]; then
+			printf "${fmterror}" "ERROR: ${topic}"
+			/usr/bin/logger "UPGRADE ${msg}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+		fi
+	else
+		printf "${fmtsuccess}" "SUCCESS: ${topic}"
+	fi
+
+	# Restore config
+	cp -p /tmp/configbak/* /conf
+
+	# Restoring boot.config
+	topic="Restoring boot.config."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	if [ -f /conf/boot.config ]; then
+		mv /conf/boot.config /cf
+		if [ $? -eq 1 ]; then
+			printf "${fmterror}" "ERROR: ${topic}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+		fi
+	else
+		printf "${fmtskipped}" "SKIPPED: ${topic}"
+	fi
+
+	# Restore loader.conf.local
+	topic="Restoring loader.conf.local."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	if [ -f /conf/loader.conf.local ]; then
+		mv /conf/loader.conf.local /cf/boot
+		if [ $? -eq 1 ]; then
+			printf "${fmterror}" "ERROR: ${topic}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+		fi
+	else
+		printf "${fmtskipped}" "SKIPPED ${topic}"
+	fi
+
+	rm -r /tmp/configbak
+
+	# Remount /cf read-only
+	topic="Unmounting /cf."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	/sbin/umount -f /cf
+	printf "${fmtsuccess}" "SUCCESS: ${topic}"
+
+	topic="Mounting /cf in read-only mode."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	/sbin/mount -r /cf
+	if [ 0 != $? ]; then
+		msg="ERROR: Failed to remount '/cf' in read-only!"
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	else
+		printf "${fmtsuccess}" "SUCCESS: ${topic}"
+	fi
+
+	# Get restored config.xml file checksum info
+	CONFSUM_NEW=`sha256 /conf/config.xml | cut -d= -f2`
+
+	# Check restored config.xml file integrity
+	topic="Verifying checksum of config.xml."
+	printf "${fmtexecute}" "EXECUTING: ${topic}"
+	if [ -f /conf/config.xml ]; then
+		if [ ! ${CONFSUM_NEW} == ${CONFSUM} ]; then
+			msg="ERROR: Restored configuration corrupted."
+			printf "\33[31m%s\33[0m\n" "${msg}"
+			exit 1
+		else
+			printf "${fmtsuccess}" "SUCCESS: ${topic}"
+		fi
+	else
+		msg="ERROR: Configuration file not found."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		exit 1
+	fi
+
+	# Umount tmpfs
+	/sbin/umount -f ${FTMP} > /dev/null 2>&1
+
+	# Reboot system if upgrade was successfully.
+	if [ 0 -eq ${RESULT} ]; then
+		msg="Firmware installed successfully."
+		printf "\33[37;41m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE: ${msg}"
+		sync; sleep 1
+
+		msg="Rebooting server..."
+		printf "\33[37m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "${msg}"
+		/sbin/shutdown -r now > /dev/null 2>&1
+	else
+		exit 1
+	fi
+}
+
+backup_sys_files() {
+	# Backup common system configuration files.
+	echo "Backup system configuration..."
+	cp -p ${BEPATH}/boot/loader.conf ${SYSBACKUP}
+
+	if [ -f "/${ZROOT}/boot.config" ]; then
+		cp -p ${BEPATH}/boot.config ${SYSBACKUP}
+	fi
+	if [ -f "/${ZROOT}/boot/loader.conf.local" ]; then
+		cp -p ${BEPATH}/boot/loader.conf.local ${SYSBACKUP}
+	fi
+	if [ -f "/${ZROOT}/boot/zfs/zpool.cache" ]; then
+		cp -p ${BEPATH}/boot/zfs/zpool.cache ${SYSBACKUP}
+	fi
+
+	cp -p ${BEPATH}/etc/fstab ${SYSBACKUP}
+	cp -p ${BEPATH}/etc/cfdevice ${SYSBACKUP}
+	cp -p ${BEPATH}/etc/rc.conf ${SYSBACKUP}
+}
+
+restore_sys_files() {
+	# Restore previous backup files on the boot environment.
+	echo "Restore system configuration..."
+	cp -pf ${SYSBACKUP}/loader.conf ${BEPATH}/boot
+
+	if [ -f "${SYSBACKUP}/boot.config" ]; then
+		cp -pf ${SYSBACKUP}/boot.config ${BEPATH}
+	else
+		rm -f ${BEPATH}/boot.config
+	fi
+	if [ -f "${SYSBACKUP}/loader.conf.local" ]; then
+		cp -pf ${SYSBACKUP}/loader.conf.local ${BEPATH}/boot
+	fi
+	if [ -f "${SYSBACKUP}/zpool.cache" ]; then
+		cp -pf ${SYSBACKUP}/zpool.cache ${BEPATH}/boot/zfs
+	fi
+
+	cp -pf ${SYSBACKUP}/fstab ${BEPATH}/etc
+	cp -pf ${SYSBACKUP}/cfdevice ${BEPATH}/etc
+	cp -pf ${SYSBACKUP}/rc.conf ${BEPATH}/etc
+}
+
+full_upgrade() {
+	# Ensure the system is configured for boot environments.
+	if ! echo ${ROOTFS} | grep -qw "${ZROOT}/ROOT"; then
+		echo "ERROR: This system does not boot from ZFS pool."
+		exit 1
+	elif ! zpool list -H -o bootfs | grep -qw "${ZROOT}/ROOT"; then
+		echo "ERROR: This system is not configured for boot environments."
+		exit 1
+	fi
+
+	# Wait 2 seconds before proceed.
+	sleep 2
+
+	# Redirect I/O to console.
+	# Prevent console redirect if no physical video adapter found.
+	if /usr/sbin/pciconf -l | grep -qw "vgapci[0-9]"; then
+		exec </dev/console >/dev/console 2>/dev/console
+	fi
+
+	printf "\n\n\33[37m%s\33[0m\n" "System upgrade in progress. Please wait..."
+
+	# Check if firmware file exists.
+	if [ ! -r "${ARG}" ]; then
+		msg="ERROR: Firmware file does not exist."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	fi
+
+	# Test firmware file.
+	echo "Testing firmware file integrity..."
+	/usr/bin/gunzip -t "${ARG}"
+	if [ 0 != $? ]; then
+		msg="ERROR: Firmware file is corrupted."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	fi
+
+	# Create and mount the new upgrade boot environment.
+	echo "Creating and mounting new boot environment..."
+	DATE=`date +%Y-%m-%d-%H%M%S`
+	/usr/local/sbin/beadm create ${BENAME}-${DATE}
+	/usr/local/sbin/beadm mount ${BENAME}-${DATE} ${BEPATH}
+	if [ 0 != $? ]; then
+		msg="ERROR: Unable to create/mount new boot environment."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		exit 1
+	fi
+
+	# Create config backup directory.
+	mkdir -p ${SYSBACKUP}
+
+	# Backup system configuration.
+	backup_sys_files
+	if [ 0 != $? ]; then
+		msg="ERROR: Failed to backup configuration."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		/usr/local/sbin/beadm unmount -f ${BENAME}-${DATE}
+		/usr/local/sbin/beadm destroy -F ${BENAME}-${DATE}
+		disable_upgrade
+		exit 1
+	fi
+
+	# Remove chflags for protected files before upgrade process.
+	if [ -f ${BEPATH}/usr/lib/librt.so.1 ]; then
+		/bin/chflags 0 ${BEPATH}/usr/lib/librt.so.1
+	fi
+
+	# Start upgrade script to remove obsolete files. This should be done
+	# before system is updated because it may happen that some files
+	# may be reintroduced in the system.
+	echo "Remove obsolete files..."
+	/etc/install/upgrade.sh clean ${BEPATH}
+
+	# Install system files and discard unwanted folders/files.
+	echo "Upgrading system on new boot environment..."
+	RESULT=1
+	EXCLUDED="--exclude=cf --exclude=conf --exclude=tmp --exclude=var --exclude=version"
+	/usr/bin/tar ${EXCLUDED} --keep-newer-files -x -U -P -f ${ARG} -C ${BEPATH} > /dev/null 2>&1
+	RESULT=$?
+	if [ 0 != ${RESULT} ]; then
+		msg="ERROR: Failed to upgrade system."
+		printf "\33[31m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE ${msg}"
+		/usr/local/sbin/beadm unmount -f ${BENAME}-${DATE}
+		/usr/local/sbin/beadm destroy -F ${BENAME}-${DATE}
+		disable_upgrade
+		exit 1
+	else
+		# Restore system configuration.
+		restore_sys_files
+		if [ 0 != $? ]; then
+			msg="ERROR: Failed restoring configuration."
+			printf "\33[31m%s\33[0m\n" "${msg}"
+			/usr/bin/logger "UPGRADE ${msg}"
+			/usr/local/sbin/beadm unmount -f ${BENAME}-${DATE}
+			/usr/local/sbin/beadm destroy -F ${BENAME}-${DATE}
+			disable_upgrade
+			exit 1
+		fi
+		# Unmoun and activate the new boot environment.
+		echo "Unmount and activate new boot environment..."
+		/usr/local/sbin/beadm unmount -f ${BENAME}-${DATE}
+		/usr/local/sbin/beadm activate ${BENAME}-${DATE}
+		if [ 0 != $? ]; then
+			msg="ERROR: Failed to unmount/activate boot environment."
+			printf "\33[31m%s\33[0m\n" "${msg}"
+			/usr/bin/logger "UPGRADE ${msg}"
+			/usr/local/sbin/beadm unmount -f ${BENAME}-${DATE}
+			/usr/local/sbin/beadm destroy -F ${BENAME}-${DATE}
+			disable_upgrade
+			exit 1
+		fi
+		msg="System upgraded successfully."
+		printf "\33[37;41m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "UPGRADE: ${msg}"
+	fi
+
+	# Cleanup and sync.
+	rm -Rf ${BEPATH}
+	rm -Rf /tmp/BE-${BENAME}-${DATE}.*
+	rm -Rf ${SYSBACKUP}
+	sync; sleep 2
+
+	# Reboot system if upgrade was successfully.
+	if [ 0 -eq ${RESULT} ]; then
+		msg="Rebooting server..."
+		printf "\33[37m%s\33[0m\n" "${msg}"
+		/usr/bin/logger "${msg}"
+		/sbin/shutdown -r now > /dev/null 2>&1
+	else
+		exit 1
+	fi
+}
+
+case $1 in
+	enable) enable_upgrade ;;
+	disable) disable_upgrade ;;
+	upgrade) embedded_upgrade ;;
+	fullupgrade) full_upgrade ;;
+	*) exit 1 ;;
+esac
+exit 0

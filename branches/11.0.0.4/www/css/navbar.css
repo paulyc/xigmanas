@@ -1,0 +1,123 @@
+/*
+	navbar.css
+
+	Part of NAS4Free (http://www.nas4free.org).
+	Copyright (c) 2012-2017 The NAS4Free Project <info@nas4free.org>.
+	All rights reserved.
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions are met:
+
+	1. Redistributions of source code must retain the above copyright notice, this
+	   list of conditions and the following disclaimer.
+
+	2. Redistributions in binary form must reproduce the above copyright notice,
+	   this list of conditions and the following disclaimer in the documentation
+	   and/or other materials provided with the distribution.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+	ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+	ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+	(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+	LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+	ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+	(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+	SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+	The views and conclusions contained in the software and documentation are those
+	of the authors and should not be interpreted as representing official policies,
+	either expressed or implied, of the NAS4Free Project.
+*/
+#navhdr {
+	background: black url("/images/navbar_default.png") center center repeat-x;
+	height: 30px;
+}
+#navhdr ul ul {
+	display: none;
+}
+#navhdr > ul > li:hover > ul,
+#navhdr > ul > li:focus > ul {
+/*	unfold submenu on event */
+	display: block;
+}
+#navhdr > ul {
+	list-style: none;
+	position: relative;
+	display: inline-table;
+	margin: 0;
+	padding: 0px 0px 0px 25px;
+	line-height: 26px;
+}
+#navhdr > ul:after {
+	content: "";
+	clear: both;
+	display: block;
+}
+#navhdr > ul > li {
+	float: left;
+	font-weight: bold;
+	font-size: 13px;
+}
+#navhdr > ul > li:hover > a {
+/*	color and background of top menu when hovered */
+	background: transparent url(/images/navbar_active.png) center center repeat-x;
+	color: black;
+}
+#navhdr > ul > li:hover > a > img {
+/*	invert image colors when hovered */
+	-webkit-filter: invert(100%);
+	filter: invert(100%);
+}
+#navhdr > ul > li > a {
+	display: block;
+	text-decoration: none;
+	padding: 2px 11px;
+	color: white;
+}
+#navhdr > ul > li > a > img {
+	vertical-align: text-bottom;
+}
+#navhdr ul ul {
+	padding: 0;
+	position: absolute;
+	top: 100%;
+	background: black;
+	border-top: 1px solid black;
+	border-left: 1px solid black;
+	border-right: 1px solid black;
+	border-bottom: 1px solid black;
+	min-width:155px;
+/*	max-width:225px; */
+	line-height: 12px;
+	list-style: none;
+}
+#navhdr ul ul li {
+	float: none; 
+	position: relative;
+}
+#navhdr ul ul li a {
+	display: block;
+	margin: 0;
+	padding: 5px 10px;
+	width: auto;
+	white-space: nowrap;
+	text-align: left;
+	text-decoration: none;
+	text-indent: 5px;
+	background: #101010;
+	font-size: 11px;
+	font-weight: normal;
+	color: white;
+}
+#navhdr ul ul li a:hover {
+	background: transparent url(/images/navbar_active.png) center center repeat-x;
+	color: black;
+}
+#navhdr ul span.tabseparator {
+	background: #AAAAAA;
+	display: block;
+	line-height: 1px;
+	height: 1px;
+}

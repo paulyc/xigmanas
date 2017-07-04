@@ -1,0 +1,162 @@
+<?php
+/*
+	globals.inc
+
+	Part of NAS4Free (http://www.nas4free.org).
+	Copyright (c) 2012-2017 The NAS4Free Project <info@nas4free.org>.
+	All rights reserved.
+
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions are met:
+
+	1. Redistributions of source code must retain the above copyright notice, this
+	   list of conditions and the following disclaimer.
+
+	2. Redistributions in binary form must reproduce the above copyright notice,
+	   this list of conditions and the following disclaimer in the documentation
+	   and/or other materials provided with the distribution.
+
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+	ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+	DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+	ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+	(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+	LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+	ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+	(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+	SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+	The views and conclusions contained in the software and documentation are those
+	of the authors and should not be interpreted as representing official policies,
+	either expressed or implied, of the NAS4Free Project.
+*/
+require_once 'super_fun.inc';
+//	system configuration parameter
+$g = [
+	'varrun_path' => '/var/run',
+	'varetc_path' => '/var/etc',
+	'vardb_path' => '/var/db',
+	"varlog_path" => '/var/log',
+	'etc_path' => '/etc',
+	'tmp_path' => '/tmp',
+	'conf_path' => '/conf',
+	'ftmp_path' => '/var/tmp/ftmp',
+	'media_path' => '/mnt',
+	'conf_default_path' => '/conf.default',
+	'cf_path' => '/cf',
+	'cf_conf_path' => '/cf/conf',
+	'www_path' => '/usr/local/www',
+	'xml_rootobj' => 'nas4free',
+	'debug' => false,
+	'latest_config' => '3.4',
+	'wireless_regex' => '/^(ndis|wlan|an|ath|bwi|bwn|ipw|iwi|iwn|malo|mwl|ral|wi|wpi|rsu|rum|run|uath|upgt|ural|urtw|urtwn|usie|zyd)/',
+	'default_passwd' => 'nas4free',
+	'default_ip' => '192.168.1.250'
+];
+//	directory of images.
+$g_img= [
+	'add' => 'images/add.png',
+	'mod' => 'images/edit.png',
+	'del' => 'images/delete.png',
+	'loc' => 'images/locked.png',
+	'unl' => 'images/unlocked.png',
+	'mai' => 'images/maintain.png',
+	'inf' => 'images/info.png',
+	'ena' => 'images/status_enabled.png',
+	'dis' => 'images/status_disabled.png',
+	'box.error' => 'images/error_box.png',
+	'box.info' => 'images/info_box.png',
+	'box.warning' => 'images/warn_box.png'
+];
+//	installation parameter
+$g_install = [
+	"default_swap" => "1024",
+	"part1min_embedded" => "466",	/*  500MB= 476MiB ->  470MB - alignment */
+	"part1size_embedded" => "1024",	/* 2000MB=1907MiB ->  768MB + SWAP1024MB */
+	"part1size_full" => "3072"	/* 4000MB=3814MiB -> 2560MB + SWAP1024MB */
+];
+//	available languages/locales. Function array_flip is used in system.inc
+$g_languages = [
+	'auto'	=> 'auto',
+	'af'    => 'af',
+	'bg'    => 'bg',
+	'ca'    => 'ca',
+	'cs'    => 'cs',
+	'zh_CN' => 'zh_cn',
+	'zh_TW' => 'zh_tw',
+	'nl'    => 'nl',
+	'da'    => 'da',
+	'en_US' => 'en_us',
+	'fi'    => 'fi',
+	'fr'    => 'fr',
+	'de'    => 'de',
+	'el'    => 'el',
+	'hu'    => 'hu',
+	'it'    => 'it',
+	'ja'    => 'ja',
+	'ko'    => 'ko',
+	'nb'    => 'nb',
+	'pl'    => 'pl',
+	'pt_BR' => 'pt_br',
+	'pt'    => 'pt',
+	'ro'    => 'ro',
+	'ru'    => 'ru',
+	'sl'    => 'sl',
+	'es'    => 'es',
+	'sv'    => 'sv',
+	'sk'    => 'sk',
+	'tr'    => 'tr',
+	'uk'    => 'uk'
+];
+$g_months = [
+	1 => gtext('January'),
+	2 => gtext('February'),
+	3 => gtext('March'),
+	4 => gtext('April'),
+	5 => gtext('May'),
+	6 => gtext('June'),
+	7 => gtext('July'),
+	8 => gtext('August'),
+	9 => gtext('September'),
+	10 => gtext('October'),
+	11 => gtext('November'),
+	12 => gtext('December')
+];
+$g_weekdays = [
+	1 => gtext('Monday'),
+	2 => gtext('Tuesday'),
+	3 => gtext('Wednesday'),
+	4 => gtext('Thursday'),
+	5 => gtext('Friday'),
+	6 => gtext('Saturday'),
+	7 => gtext('Sunday')
+];
+//	supported filesystems
+$g_filesystems = [
+	'' => gtext('Unformatted'),
+	'ufs' => gtext('UFS with Soft Updates'),
+	'ufs_no_su' => 'UFS',
+	'ufsgpt' => gtext('UFS (GPT and Soft Updates)'),
+	'ufsgpt_no_su' => 'UFS (EFI/GPT)',
+	'msdos' => 'FAT32',
+	'cd9660' => 'CD/DVD',
+	'ntfs' => 'NTFS',
+	'ext2' => 'EXT2',
+	'exfat' => 'exFAT',
+	'softraid' => 'Software RAID',
+	'geli' => 'Encrypted',
+	'zfs' => 'ZFS Storage Pool'
+];
+//	upload status messages
+$g_file_upload_error = [
+	UPLOAD_ERR_OK => gtext('There is no error, the file uploaded with success.'),
+	UPLOAD_ERR_INI_SIZE => gtext('The uploaded file exceeds the upload_max_filesize directive in php.ini.'),
+	UPLOAD_ERR_FORM_SIZE => gtext('The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form.'),
+	UPLOAD_ERR_PARTIAL => gtext('The uploaded file was only partially uploaded.'),
+	UPLOAD_ERR_NO_FILE => gtext('No file was uploaded.'),
+	UPLOAD_ERR_NO_TMP_DIR => gtext('Missing a temporary folder.'),
+	UPLOAD_ERR_CANT_WRITE => gtext('Failed to write file to disk.'),
+	UPLOAD_ERR_EXTENSION => gtext('File upload stopped by extension.')
+];
+?>
