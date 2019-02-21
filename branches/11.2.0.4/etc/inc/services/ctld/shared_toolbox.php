@@ -33,7 +33,9 @@
 */
 namespace services\ctld;
 use common\sphere as mys;
-
+/**
+ *	Wrapper class for autoloading functions
+ */
 final class shared_toolbox {
 	private const NOTIFICATION_PROCESSOR = 'process_notification';
 /**
