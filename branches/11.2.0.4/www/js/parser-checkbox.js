@@ -32,17 +32,19 @@
  */
 ( function( $ ) {
 	$.tablesorter.addParser({
-		//	set a unique id
 		id: 'checkbox',
-		is: function( s ) {
-			//	return false so this parser is not auto detected
+		is: function( ) {
 			return false;
 		},
-		format: function( s , table , cell ) {
-			//	return 1 if checked, otherwise return 2
-			return $(cell).children(":checkbox").get(0).checked ? 1 : 2;
+		format : function( txt, table, cell ) {
+			var $cell = $( cell ),
+				wo = table.config.widgetOptions,
+				status = wo.group_checkbox ? wo.group_checkbox : [ 'checked', 'unchecked' ],
+				$input = $cell.find( 'input[type="checkbox"]' ),
+				isChecked = $input.length ? $input[ 0 ].checked : '';
+			return $input.length ? status[ isChecked ? 0 : 1 ] : txt;
 		},
-		//	set type, either numeric or text
-		type: 'numeric'
+		parsed : true, // filter widget flag
+		type : 'text'
 	});
 })( jQuery ) ;
