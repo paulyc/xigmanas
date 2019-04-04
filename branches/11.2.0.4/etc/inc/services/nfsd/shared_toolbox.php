@@ -75,8 +75,9 @@ final class shared_toolbox {
 		$document->
 			add_area_tabnav()->
 				add_tabnav_upper()->
-					ins_tabnav_record('services_nfs.php',gettext('Global Settings'),gettext('Reload page'),true)->
-					ins_tabnav_record('services_nfs_share.php',gettext('Shares'));
+					ins_tabnav_record('services_nfs.php',gettext('Settings'),gettext('Reload page'),true)->
+					ins_tabnav_record('services_nfs_export.php',gettext('Export'))->
+					ins_tabnav_record('services_nfs_root.php',gettext('Root Directory'));
 		return $retval;
 	}
 }
