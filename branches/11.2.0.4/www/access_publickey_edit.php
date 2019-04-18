@@ -37,6 +37,7 @@ require_once 'autoload.php';
 
 use system\access\publickey\row_toolbox as toolbox;
 use system\access\publickey\shared_toolbox;
+use system\access\user\grid_toolbox as toolbox_user;
 
 //	init indicators
 $input_errors = [];
@@ -48,6 +49,8 @@ endif;
 //	init properties and sphere
 $cop = toolbox::init_properties();
 $sphere = toolbox::init_sphere();
+$cop_user = toolbox_user::init_properties();
+$sphere_user = toolbox_user::init_sphere();
 $rmo = toolbox::init_rmo();
 list($page_method,$page_action,$page_mode) = $rmo->validate();
 //	determine page mode and validate resource id
@@ -139,6 +142,10 @@ $a_referer = [
 	$cop->get_description()
 ];
 $a_user = ['root' => 'root'];
+foreach($sphere_user->grid as $sphere_user->row):
+	$value = $sphere_user->row[$cop_user->get_login()->get_name()] ?? '';
+	$a_user[$value] = $value;
+endforeach;
 $cop->get_login()->set_options($a_user);
 switch($page_mode):
 	case PAGE_MODE_ADD:
