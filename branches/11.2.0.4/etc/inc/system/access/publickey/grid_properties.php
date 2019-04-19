@@ -36,16 +36,16 @@ namespace system\access\publickey;
 use common\properties as myp;
 
 class grid_properties extends myp\container_row {
-	protected $x_login;
-	public function init_login(): myp\property_list {
-		$property = $this->x_login = new myp\property_list($this);
+	protected $x_name;
+	public function init_name(): myp\property_list {
+		$property = $this->x_name = new myp\property_list($this);
 		$property->
 			set_name('login')->
 			set_title(gettext('Login Name'));
 		return $property;
 	}
-	final public function get_login(): myp\property_list {
-		return $this->x_login ?? $this->init_login();
+	final public function get_name(): myp\property_list {
+		return $this->x_name ?? $this->init_name();
 	}
 	protected $x_publickey;
 	public function init_publickey(): myp\property_text {

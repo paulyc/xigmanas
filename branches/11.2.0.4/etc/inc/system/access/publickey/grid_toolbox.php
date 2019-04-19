@@ -73,6 +73,7 @@ final class grid_toolbox {
  */
 	public static function init_rmo(grid_properties $cop,mys\grid $sphere) {
 		$rmo = myr\rmo_grid_templates::rmo_base($cop,$sphere);
+		$rmo->add('POST','reload',PAGE_MODE_POST);
 		return $rmo;
 	}
 /**
@@ -118,7 +119,8 @@ final class grid_toolbox {
 			ins_input_errors($input_errors)->
 			ins_info_box($savemsg)->
 			ins_error_box($errormsg);
-		if(updatenotify_exists($sphere->get_notifier())):
+		$pending_changes = updatenotify_exists($sphere->get_notifier());
+		if($pending_changes):
 			$content->ins_config_has_changed_box();
 		endif;
 //		add content
@@ -135,14 +137,14 @@ final class grid_toolbox {
 				addTHwC('lhelc sorter-false parser-false')->
 					ins_cbm_checkbox_toggle($sphere)->
 				pop()->
-				insTHwC('lhell',$cop->get_login()->get_title())->
+				insTHwC('lhell',$cop->get_name()->get_title())->
 				insTHwC('lhelc sorter-image',gettext('Active'))->
 				insTHwC('lhell',$cop->get_description()->get_title())->
 				insTHwC('lhebl sorter-false parser-false',$cop->get_toolbox()->get_title());
 		else:
 			$tr->
 				insTHwC('lhelc')->
-				insTHwC('lhell',$cop->get_login()->get_title())->
+				insTHwC('lhell',$cop->get_name()->get_title())->
 				insTHwC('lhelc',gettext('Active'))->
 				insTHwC('lhell',$cop->get_description()->get_title())->
 				insTHwC('lhebl',$cop->get_toolbox()->get_title());
@@ -161,7 +163,7 @@ final class grid_toolbox {
 						addTDwC('lcelc' . $dc)->
 							ins_cbm_checkbox($sphere,!($is_notdirty && $is_notprotected))->
 						pop()->
-						insTDwC('lcell' . $dc,$sphere->row[$cop->get_login()->get_name()] ?? '')->
+						insTDwC('lcell' . $dc,$sphere->row[$cop->get_name()->get_name()] ?? '')->
 						ins_enadis_icon($is_enabled)->
 						insTDwC('lcell' . $dc,$sphere->row[$cop->get_description()->get_name()] ?? '')->
 						add_toolbox_area()->
@@ -173,10 +175,13 @@ final class grid_toolbox {
 			$tfoot->ins_no_records_found($n_col_width);
 		endif;
 		$tfoot->ins_record_add($sphere,$n_col_width);
-		$document->
-			add_area_buttons()->
-				ins_cbm_button_enadis($sphere)->
-				ins_cbm_button_delete($sphere);
+		$buttons = $document->add_area_buttons();
+		$buttons->
+			ins_cbm_button_enadis($sphere)->
+			ins_cbm_button_delete($sphere);
+		if(!$pending_changes):
+			$buttons->ins_button_reload(true,gettext('Reload'));
+		endif;
 //		additional javascript code
 		$body->addJavaScript($sphere->get_js());
 		$body->add_js_on_load($sphere->get_js_on_load());

@@ -38,22 +38,6 @@ require_once 'autoload.php';
 use system\access\user\row_toolbox as toolbox;
 use system\access\user\shared_toolbox;
 
-function get_next_uid() {
-	global $config;
-
-//	Get next available uid.
-	exec('/usr/sbin/pw nextuser',$output);
-	$output = explode(':',$output[0]);
-	$result = intval($output[0]);
-//	Check if id is already in use. If the user does not press the 'Apply'
-//	button 'pw' does not recognize that there are already several new users
-//	configured because the user db is not updated until 'Apply' is pressed.
-	$a_user = array_make_branch($config,'access','user');
-	while(false !== array_search_ex(strval($result),$a_user,'id')):
-		$result++;
-	endwhile;
-	return $result;
-}
 //	init indicators
 $input_errors = [];
 $prerequisites_ok = true;
@@ -159,13 +143,12 @@ $a_referer = [
 	$cop->get_primary_group(),
 	$cop->get_additional_groups(),
 	$cop->get_homedir(),
-	$cop->get_user_portal_access(),
+	$cop->get_user_portal_access()
 ];
 $a_group = array_flip(system_get_group_list());
-$next_available_uid =
 $cop->get_primary_group()->set_options($a_group);
 $cop->get_additional_groups()->set_options($a_group);
-$cop->get_uid()->set_defaultvalue(get_next_uid());
+$cop->get_uid()->set_defaultvalue(toolbox::get_next_uid());
 switch($page_mode):
 	case PAGE_MODE_ADD:
 		foreach($a_referer as $referer):
@@ -177,6 +160,8 @@ switch($page_mode):
 			$name = $referer->get_name();
 			$sphere->row[$name] = $referer->validate_input() ?? $referer->get_defaultvalue();
 		endforeach;
+//		overwrite uid with next uid
+		$sphere->row[$cop->get_uid()->get_name()] = $cop->get_uid()->get_defaultvalue();
 //		adjust page mode
 		$page_mode = PAGE_MODE_ADD;
 		break;
