@@ -569,6 +569,33 @@ restore_sys_files() {
 	fi
 }
 
+upgrade_menuforth() {
+	# Update to latest loader manu files.
+	# This is for backward compatibility only.
+	BOOTPATH=${BEPATH}
+	if [ "${MBRPART}" = 1 ]; then
+		BOOTPATH=/${BOOTPOOL}
+	fi
+	if [ -d "${BEPATH}/etc/install/include/boot" ]; then
+		cp -pf ${BEPATH}/etc/install/include/boot/* ${BOOTPATH}/boot
+		chmod 444 ${BOOTPATH}/boot/menu.4th
+	fi
+
+	if ! grep -q "beastie-start" ${BEPATH}/boot/loader.rc; then
+	# Generate/update our loader.rc if missing.
+	cat << EOF > ${BOOTPATH}/boot/loader.rc
+\ Loader.rc
+include /boot/loader.4th
+start
+initialize
+check-password
+include /boot/beastie.4th
+beastie-start
+EOF
+	chmod 444 ${BOOTPATH}/boot/loader.rc
+	fi
+}
+
 post_upgrade_config() {
 	# Check if zfs_enable is set to yes to automount our datasets on boot.
 	if [ -f "${BEPATH}/etc/rc.conf.local" ]; then
@@ -590,11 +617,11 @@ disable_bootenv() {
 
 full_upgrade() {
 	# Ensure the system is configured for boot environments.
-	if ! echo ${ROOTFS} | /usr/bin/grep -qw "${ZROOT}/ROOT"; then
+	if ! echo ${ROOTFS} | grep -qw "${ZROOT}/ROOT"; then
 		msg="ERROR: This system does not boot from ZFS pool."
 		/usr/bin/logger -p console.err "UPGRADE ${msg}"
 		exit 1
-	elif ! zpool list -H -o bootfs | /usr/bin/grep -qw "${ZROOT}/ROOT"; then
+	elif ! zpool list -H -o bootfs | grep -qw "${ZROOT}/ROOT"; then
 		msg="ERROR: This system is not configured for boot environments."
 		/usr/bin/logger -p console.err "UPGRADE ${msg}"
 		exit 1
@@ -668,7 +695,7 @@ full_upgrade() {
 	# may be reintroduced in the system.
 	msg="Remove obsolete files..."
 	/usr/bin/logger -p console.debug "UPGRADE: ${msg}"
-	${BEPATH}/etc/install/upgrade.sh clean ${BEPATH}
+	/etc/install/upgrade.sh clean ${BEPATH}
 
 	# Backup chflags before removal.
 	backup_chflags
@@ -690,7 +717,7 @@ full_upgrade() {
 		/usr/bin/tar --keep-newer-files -v -x -U -P -f ${ARG} -C /${BOOTPOOL} boot > /dev/null 2>&1
 		RESULT=$?
 		if [ 0 != ${RESULT} ]; then
-			msg="ERROR: Failed file extraction for ${BOOTPOOL}."
+			msg="ERROR: Failed to upgrade ${BOOTPOOL}."
 			/usr/bin/logger -p console.err "UPGRADE ${msg}"
 			disable_bootenv
 			disable_upgrade
@@ -705,7 +732,7 @@ full_upgrade() {
 	/usr/bin/tar ${EXCLUDED} --keep-newer-files -v -x -U -P -f ${ARG} -C ${BEPATH} > /dev/null 2>&1
 	RESULT=$?
 	if [ 0 != ${RESULT} ]; then
-		msg="ERROR: Failed file extraction for ${ZROOT}."
+		msg="ERROR: Failed to upgrade system."
 		/usr/bin/logger -p console.err "UPGRADE ${msg}"
 		disable_bootenv
 		disable_upgrade
@@ -724,6 +751,16 @@ full_upgrade() {
 		# Restore chflags after files extraction.
 		restore_chflags
 
+		# Include latest loader menu files.
+		upgrade_menuforth
+		if [ 0 != ${RESULT} ]; then
+			msg="ERROR: Failed to upgrade menu boot module."
+			/usr/bin/logger -p console.err "UPGRADE ${msg}"
+			disable_bootenv
+			disable_upgrade
+			exit 1
+		fi
+
 		# Post upgrade config checkings.
 		post_upgrade_config
 		if [ 0 != $? ]; then
@@ -740,9 +777,9 @@ full_upgrade() {
 		/usr/local/sbin/beadm unmount -f ${BENAME}-${DATE}
 
 		if [ "${MBRPART}" = 1 ]; then
-			if ! /usr/bin/grep -qw '${BOOTPOOL}' /usr/local/sbin/beadm; then
+			if ! grep -qw '${BOOTPOOL}' /usr/local/sbin/beadm; then
 				# Directly update the bootfs to point for the new boot environment on ZFS/MBR,
-				# this is due a known bug and/or limitation in the beadm utility.
+				# this is due a known bug in the beadm utility prior to version 1.3.0.
 				zpool set bootfs=${ZROOT}${DATASET}/${BENAME}-${DATE} ${ZROOT}
 
 				# Update current loader.conf on ZFS/MBR since bootpool is shared across boot environments by default.

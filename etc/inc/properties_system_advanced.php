@@ -286,6 +286,26 @@ class properties_system_advanced extends co_property_container {
 			set_message_error(sprintf('%s: %s',$property->get_title(),gettext('The value is invalid.')));
 		return $property;
 	}
+	protected $x_tune_enable;
+	public function get_tune_enable() {
+		return $this->x_tune_enable ?? $this->init_tune_enable();
+	}
+	public function init_tune_enable() {
+		$property = $this->x_tune_enable = new property_bool($this);
+		$property->
+			set_name('tune_enable')->
+			set_title(gettext('Tuning'));
+		$property->
+			set_id('tune_enable')->
+			set_caption(gettext('Enable tuning of some kernel variables.'))->
+			set_description('')->
+			set_defaultvalue(false)->
+			filter_use_default()->
+			set_editableonadd(true)->
+			set_editableonmodify(true)->
+			set_message_error(sprintf('%s: %s',$property->get_title(),gettext('The value is invalid.')));
+		return $property;
+	}
 	protected $x_zeroconf;
 	public function get_zeroconf() {
 		return $this->x_zeroconf ?? $this->init_zeroconf();

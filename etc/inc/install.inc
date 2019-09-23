@@ -193,7 +193,6 @@ function install_dd_image(string $harddrive) {
 function install_harddrive_image(string $harddrive) {
 	global $g;
 
-	$prdname = get_product_name();
 //	Determine if target disk/partition is GPT or MBR
 	if(mwexec("/sbin/gpart show {$harddrive} | grep GPT") == false ):
 		$part = 'p2';
@@ -228,9 +227,9 @@ function install_harddrive_image(string $harddrive) {
 	mwexec("/bin/mkdir -p {$mntpath}/tmp");
 	mwexec("/bin/chmod 1777 {$mntpath}/tmp");
 	mwexec("/bin/mkdir -p {$mntpath}/boot/defaults");
-	mwexec("/bin/cp -r /mnt/cdrom/boot/* {$mntpath}/boot/");
-	mwexec("/bin/cp -r /mnt/cdrom/boot/defaults/* {$mntpath}/boot/defaults/");
-	mwexec("/bin/cp -r /mnt/cdrom/boot/kernel/* {$mntpath}/boot/kernel/");
+	mwexec("/bin/cp -v /mnt/cdrom/boot/* {$mntpath}/boot");
+	mwexec("/bin/cp -v /mnt/cdrom/boot/defaults/* {$mntpath}/boot/defaults");
+	mwexec("/bin/cp -v /mnt/cdrom/boot/kernel/* {$mntpath}/boot/kernel");
 	mwexec("/bin/cp -v /etc/rc.d/var {$mntpath}/etc/rc.d/var");
 //	Install configuration file
 	mwexec("/bin/mkdir -p {$mntpath}{$g['cf_conf_path']}");
@@ -249,8 +248,8 @@ kern.geom.label.disk_ident.enable="0"
 kern.geom.label.gptid.enable="0"
 hint.acpi_throttle.0.disabled="0"
 hint.p4tcc.0.disabled="0"
-loader_brand="{$prdname}"
 autoboot_delay="3"
+isboot_load="YES"
 zfs_load="YES"
 
 EOD;
@@ -452,13 +451,9 @@ EOD;
 	mwexec("/bin/rm -f -r {$mntpath}");
 	return 0;
 }
-/**
- *	Check version of the hard drive/CF
- *	@global array $g
- *	@param string $disk
- *	@return int Return 0 if successful, otherwise 1
- */
-function install_check_version(string $disk) {
+//	Check version of the hard drive/CF
+//	Return 0 if successful, otherwise 1
+function install_check_version($disk) {
 	global $g;
 
 	$mnt_cf_disk = "/mnt/chkver_{$disk}";

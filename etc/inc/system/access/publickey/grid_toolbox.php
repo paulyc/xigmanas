@@ -224,7 +224,6 @@ final class grid_toolbox {
 			case 'POST':
 				switch($page_action):
 					case 'apply':
-					case 'reload':
 						$retval = 0;
 						$retval |= updatenotify_process($sphere->get_notifier(),$sphere->get_notifier_processor());
 						config_lock();

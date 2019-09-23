@@ -174,6 +174,22 @@ if(is_booting()):
 					endif;
 					//	Unmount device
 					mwexec("/sbin/umount -f {$g['cf_path']}");
+				elseif(($g['arch'] == "rpi" || $g['arch'] == "rpi2" || $g['arch'] == "oc1") && (0 == mwexec("/sbin/mount -r /dev/{$disk}s3a {$g['cf_path']}"))): // Search on slice 3
+					if(file_exists("{$g['cf_conf_path']}/config.xml")):
+						$cfgdevice = $disk;
+						$cfgpartition = "{$cfgdevice}s3a";
+						$cfgfstype = 'ufs';
+					endif;
+					//	Unmount device
+					mwexec("/sbin/umount -f {$g['cf_path']}");
+				elseif(($g['arch'] == "bpi" ) && (0 == mwexec("/sbin/mount -w  /dev/{$disk}s2a {$g['cf_path']}"))): // Search on slice 2
+					if(file_exists($g['cf_conf_path']."/config.xml")):
+						$cfgdevice = $disk;
+						$cfgpartition = "{$cfgdevice}s2a";
+						$cfgfstype = 'ufs';
+					endif;
+					//	Unmount device
+					mwexec("/sbin/umount -f {$g['cf_path']}");
 				endif;
 				//	Device found, exit
 				if($cfgdevice):
@@ -242,6 +258,14 @@ if(is_booting()):
 		//	Append process file system to /etc/fstab
 		$data = "proc /proc procfs rw 0 0\n";
 		@file_put_contents("{$g['etc_path']}/fstab",$data,FILE_TEXT | FILE_APPEND);
+	endif;
+	//	BananaPI
+	if($g['arch'] == "bpi" ):
+		if(mwexec("/usr/bin/grep ' /boot/msdos ' {$g['etc_path']}/fstab") != 0):
+			//	Append process file system to /etc/fstab
+			$data = "/dev/{$cfgdevice}s1 /boot/msdos  msdosfs ro 0 0\n";
+			@file_put_contents("{$g['etc_path']}/fstab",$data,FILE_TEXT | FILE_APPEND);
+		endif;
 	endif;
 	//	Mount all filesystems
 	mwexec('/sbin/mount -a');

@@ -223,7 +223,79 @@ function get_smbios_info() {
 		endif;
 	endforeach;
 	$platform = get_platform_type();
-	if($smbios['bios']['vendor'] == 'BHYVE'):
+	if(preg_match('/^rpi-/',$platform) || preg_match('/^rpi2-/',$platform)):
+		// fake data on RPi
+		$smbios['bios']['reldate'] = "12/01/2014";
+		$smbios['bios']['vendor'] = "Raspberry Pi";
+		$smbios['bios']['version'] = "1.0";
+		$smbios['planar']['maker'] = "Raspberry Pi Foundation";
+		$smbios['planar']['product'] = "Raspberry Pi";
+
+		$revision = chop(`/sbin/sysctl -n hw.board.revision`);
+		$scheme = ($revision & 0x800000) >> 23;
+		$ram = ($revision & 0x700000) >> 20;
+		$revision &= 0xffff;
+		$model = '';
+		if(!empty($revision) && $scheme == 0):
+			if($revision <= 0x0006): $model = 'Model B (256MB)';
+			elseif($revision >= 0x0007 && $revision <= 0x0009): $model = 'Model A';
+			elseif($revision >= 0x000d && $revision <= 0x000f): $model = 'Model B';
+			elseif($revision == 0x0010 || $revision == 0x0013): $model = 'Model B+';
+			elseif($revision == 0x0011 || $revision == 0x0014): $model = 'Compute Module';
+			elseif($revision == 0x0012): $model = 'Model A+';
+			else:
+				$model = sprintf('rev. 0x%04x',$revision);
+			endif;
+		elseif(!empty($revision) && $scheme != 0):
+			$processor = ($revision & 0xf000) >> 12;
+			$type = ($revision & 0x0ff0) >> 4;
+			if($type == 0): $model = 'Model A';
+			elseif($type == 1): $model = 'Model B';
+			elseif($type == 2): $model = 'Model A+';
+			elseif($type == 3): $model = 'Model B+';
+			elseif($type == 4): $model = '2 Model B';
+			elseif($type == 5): $model = 'Alpha';
+			elseif($type == 6): $model = 'Compute Module';
+			else:
+				$model = sprintf('rev. 0x%04x',$revision);
+			endif;
+			if(!empty($model)):
+				if($ram == 0):
+					$model .= ' (256MB)';
+				endif;
+			endif;
+		endif;
+		if(!empty($model)):
+			$smbios['planar']['product'] .= sprintf(' %s',$model);
+		endif;
+		$serial = rtrim(`/sbin/sysctl -n hw.board.serial`);
+		$serial = preg_replace('/^0+/','',$serial);
+		if(!empty($serial)):
+			$smbios['planar']['product'] .= sprintf(' (S/N: %s)',$serial);
+		endif;
+	elseif(preg_match('/^oc1-/',$platform)):
+		// fake data on ODROID-C1
+		$smbios['bios']['reldate'] = '01/01/2015';
+		$smbios['bios']['vendor'] = 'ODROID-C1';
+		$smbios['bios']['version'] = '1.0';
+		$smbios['planar']['maker'] = 'Hardkernel';
+		$smbios['planar']['product'] = 'ODROID-C1';
+		$serial = rtrim(shell_exec('/sbin/sysctl -n hw.board.serial'));
+		if(!empty($serial)):
+			$smbios['planar']['product'] .= sprintf(' (S/N: %s)',$serial);
+		endif;
+	elseif(preg_match('/^bpi-/',$platform)):
+		// fake data on BANANA-PI
+		$smbios['bios']['reldate'] = '01/01/2015';
+		$smbios['bios']['vendor'] = 'BANANA-PI';
+		$smbios['bios']['version'] = '1.0';
+		$smbios['planar']['maker'] = 'Sinovoip Co';
+		$smbios['planar']['product'] = chop(`sysctl -n dev.cpu.0.%pnpinfo | awk -F "," '{ print $2; }'`);
+		$serial = rtrim(shell_exec('/sbin/sysctl -n hw.board.revision'));
+		if(!empty($serial)):
+			$smbios['planar']['product'] .= sprintf(' (S/N: %s)',$serial);
+		endif;
+	elseif($smbios['bios']['vendor'] == 'BHYVE'):
 		$smbios['bios']['reldate'] = '01/01/2015';
 		$smbios['bios']['vendor'] = 'BHyVe';
 		$smbios['bios']['version'] = '1.0';
@@ -284,10 +356,34 @@ function system_get_cpu_usage(): float {
 function system_get_cpu_info() {
 	$platform = '';
 	$cpuinfo = [];
-	$cpuinfo['number'] = rtrim(`/sbin/sysctl -n hw.ncpu`);
-	$cpuinfo['model'] = rtrim(`/sbin/sysctl -n hw.model`);
-	$cpuinfo['clockrate'] = rtrim(`/sbin/sysctl -n hw.clockrate`);
-	$cpuinfo['temperature'] = rtrim(`/sbin/sysctl -n hw.acpi.thermal.tz0.temperature`);
+	$cpuinfo['number'] = chop(`/sbin/sysctl -n hw.ncpu`);
+	$cpuinfo['model'] = chop(`/sbin/sysctl -n hw.model`);
+	if(empty($cpuinfo['model'])):
+		$platform = chop(`/sbin/sysctl -n hw.platform`);
+		switch($platform):
+			case 'bcm2835':
+				$cpuinfo['model'] = 'Broadcom BCM2835';
+				break;
+			case 'bcm2836':
+				$cpuinfo['model'] = 'Broadcom BCM2836';
+				break;
+			case 'meson8b':
+				$cpuinfo['model'] = 'Amlogic S805';
+				break;
+			case 'a20':
+				$cpuinfo['model'] = 'Allwinner a20';
+				break;
+			default:
+				$cpuinfo['model'] = $platform;
+				break;
+		endswitch;
+	endif;
+	$cpuinfo['clockrate'] = chop(`/sbin/sysctl -n hw.clockrate`);
+	if($platform == 'a20'):
+		$cpuinfo['temperature'] = chop(`/sbin/sysctl -n dev.axp209_pmu.0.temp`);
+	else:
+		$cpuinfo['temperature'] = chop(`/sbin/sysctl -n hw.acpi.thermal.tz0.temperature`);
+	endif;
 	$cpus = system_get_cpus();
 	$cpuinfo['temperature2'] = [];
 	$temp = @exec("/sbin/sysctl -q -n dev.cpu.0.temperature");

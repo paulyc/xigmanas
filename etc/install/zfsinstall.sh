@@ -22,12 +22,6 @@ ZROOT="zroot"
 BOOTPOOL="bootpool"
 GMIRRORBAL="load"
 
-# GELI options(bsdinstall).
-GELIALGO="AES-XTS"
-GELIINTER="256"
-GELISECTOR="4096"
-GELIBACKUP="/var/backups"
-
 tmpfile=/tmp/zfsinstall.$$
 trap "rm -f ${tmpfile}" 0 1 2 3 5 6 9 15
 
@@ -169,13 +163,6 @@ load_kmods()
 	if ! kldstat | grep -q geom_mirror; then
 		kldload /boot/kernel/geom_mirror.ko
 	fi
-
-	# Load aesni kernel module.
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		if ! kldstat | grep -qw aesni; then
-			kldload /boot/kernel/aesni.ko
-		fi
-	fi
 }
 
 # Create GPT/Partition on disk.
@@ -183,7 +170,6 @@ gptpart_init()
 {
 	DISKS=${DEVICE_LIST}
 	swapdevlist=/tmp/swapdevlist.$$
-	gelidevlist=/tmp/gelidevlist.$$
 	cat /dev/null > ${tmpfile}
 	NUM="0"
 	for DISK in ${DISKS}
@@ -206,31 +192,13 @@ gptpart_init()
 		gpart add -a 4m ${ZROOT_SIZE} -t freebsd-zfs -l sysdisk${NUM} ${DISK} > /dev/null
 		# Generate the glabel device list.
 		echo "/dev/gpt/sysdisk${NUM}" >> ${tmpfile}
-
-		if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-			# Generate the geli device list.
-			echo "/dev/gpt/sysdisk${NUM}.eli" >> ${gelidevlist}
-		fi
-
 		NUM=$(expr $NUM + 1)
 	done
 
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		GELI_DEVLIST=$(cat ${tmpfile})
-		ZROOT_DEVLIST=$(cat ${gelidevlist})
-		rm -f ${gelidevlist}
-	else
-		ZROOT_DEVLIST=$(cat ${tmpfile})
-	fi
-
+	ZROOT_DEVLIST=$(cat ${tmpfile})
 	if [ ! -z "${SWAP_SIZE}" ]; then
 		SWAP_DEVLIST=$(cat ${swapdevlist})
 		rm -f ${swapdevlist}
-	fi
-
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		# Initialize encryption.
-		geom_geli_init
 	fi
 }
 
@@ -239,7 +207,6 @@ mbrpart_init()
 {
 	DISKS=${DEVICE_LIST}
 	swapdevlist=/tmp/swapdevlist.$$
-	gelidevlist=/tmp/gelidevlist.$$
 	bootdevlist=/tmp/bootdevlist.$$
 	cat /dev/null > ${tmpfile}
 	#NUM="0"
@@ -277,82 +244,14 @@ mbrpart_init()
 		# Generate the mbr device list.
 		echo "${DISK}s1d" >> ${tmpfile}
 
-		if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-			# Generate the geli device list.
-			echo "/dev/${DISK}s1d.eli" >> ${gelidevlist}
-		fi
-
 		#NUM=$(expr $NUM + 1)
 	done
 
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		GELI_DEVLIST=$(cat ${tmpfile})
-		ZROOT_DEVLIST=$(cat ${gelidevlist})
-		rm -f ${gelidevlist}
-	else
-		ZROOT_DEVLIST=$(cat ${tmpfile})
-	fi
-
+	ZROOT_DEVLIST=$(cat ${tmpfile})
 	BOOTPOOL_DEVLIST=$(cat ${bootdevlist})
-
 	if [ ! -z "${SWAP_SIZE}" ]; then
 		SWAP_DEVLIST=$(cat ${swapdevlist})
 		rm -f ${swapdevlist}
-	fi
-}
-
-# Initialize encryption.
-geom_geli_init()
-{
-	load_kmods
-
-	DISKS=${GELI_DEVLIST}
-	for DISK in ${DISKS}
-	do
-		echo "Encryption in progress for ${DISK}..."
-		RETURN=1
-		#cdialog --backtitle "${PRDNAME} ${APPNAME} Installer" --title "Encryption in progress!" --infobox \
-		#"Initializing encryption on selected disks, this will take several seconds per disk." 4 46
-
-		# Encrypt selected drives.
-		if [ "${BOOT_MODE}" = 3 ]; then
-			geli init -b -B ${ALTROOT}/${BOOTPOOL}/boot/${DISK}.eli -e ${GELIALGO} -J "${GELIPASS1}" -K ${ALTROOT}/${BOOTPOOL}/boot/encryption.key -l ${GELIINTER} -s ${GELISECTOR} ${DISK} > /dev/null
-			geli attach -j "${GELIPASS1}" -k ${ALTROOT}/${BOOTPOOL}/boot/encryption.key ${DISK}
-		else
-			geli init -bg -e ${GELIALGO} -J "${GELIPASS1}" -l ${GELIINTER} -s ${GELISECTOR} ${DISK} > /dev/null
-			geli attach -j "${GELIPASS1}" ${DISK}
-		fi
-
-		RETURN=$?
-		if [ "${RETURN}" -eq 0 ]; then
-			echo "Encryption success!"
-		else
-			echo "Encryption failed, exiting!"
-			exit 1
-		fi
-	done
-}
-
-geli_meta_backup()
-{
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		if [ ! -d "${ALTROOT}${GELIBACKUP}" ]; then
-			mkdir -p -m 750 ${ALTROOT}${GELIBACKUP}
-		fi
-		cd ${GELIBACKUP}
-		for ITEM in *.eli
-		do
-			if [ -f "${ITEM}" ]; then
-				RETURN=1
-				mv -f ${ITEM} ${ALTROOT}${GELIBACKUP}/${ITEM}
-				RETURN=$?
-				if [ "${RETURN}" -ne 0 ]; then
-					echo "Failed to backup geli providers metadata, exiting!"
-					exit 1
-				fi
-			fi
-		done
-		cd
 	fi
 }
 
@@ -415,11 +314,6 @@ zroot_init()
 		fi
 
 		mkdir -p ${ALTROOT}/${BOOTPOOL}/boot
-		if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-			dd if="/dev/random" of="${ALTROOT}/${BOOTPOOL}/boot/encryption.key" bs=4096 count=1 > /dev/null 2>&1
-			chmod go-wrx ${ALTROOT}/${BOOTPOOL}/boot/encryption.key
-			geom_geli_init
-		fi
 		zfs unmount ${BOOTPOOL}
 		umount ${ALTROOT}
 	fi
@@ -511,32 +405,21 @@ zroot_init()
 	# Creating/adding the fixed swap devices.
 	if [ ! -z "${SWAP_SIZE}" ]; then
 		if [ "${SWAPMODE}" = 1 ]; then
-			echo "Creating/adding swap mirror..."
+			echo "Creating/adding swap Mirror..."
 			if ! kldstat | grep -q geom_mirror; then
 				kldload /boot/kernel/geom_mirror.ko
 			fi
 			gmirror label -b ${GMIRRORBAL} swap ${SWAP_DEVLIST}
 			# Add swap mirror to fstab.
-			if echo ${GELI_MODE} | grep -qw "SWAP+GELI"; then
-				echo "/dev/mirror/swap.eli none swap sw 0 0" >> ${ALTROOT}/etc/fstab
-			else
-				echo "/dev/mirror/swap none swap sw 0 0" >> ${ALTROOT}/etc/fstab
-			fi
+			echo "/dev/mirror/swap none swap sw 0 0" >> ${ALTROOT}/etc/fstab
 		else
 			# Add swap device to fstab.
 			echo "Adding swap devices to fstab..."
 			for swapdev in ${SWAP_DEVLIST}; do
-				if echo ${GELI_MODE} | grep -qw "SWAP+GELI"; then
-					echo "${swapdev}.eli none swap sw 0 0" >> ${ALTROOT}/etc/fstab
-				else
-					echo "${swapdev} none swap sw 0 0" >> ${ALTROOT}/etc/fstab
-				fi
+				echo "${swapdev} none swap sw 0 0" >> ${ALTROOT}/etc/fstab
 			done
 		fi
 	fi
-
-	# Backup geli providers metadata.
-	geli_meta_backup
 
 	# Unmount cd-rom.
 	umount_cdrom
@@ -602,9 +485,8 @@ kern.geom.label.disk_ident.enable="0"
 kern.geom.label.gptid.enable="0"
 hint.acpi_throttle.0.disabled="0"
 hint.p4tcc.0.disabled="0"
-loader_brand="${PRDNAME}"
 autoboot_delay="3"
-#isboot_load="YES"
+isboot_load="YES"
 zfs_load="YES"
 EOF
 	if [ "${BOOT_MODE}" = 3 ]; then
@@ -619,25 +501,6 @@ EOF
 		if [ ! -z "${SWAP_SIZE}" ]; then
 			echo 'geom_mirror_load="YES"' >> ${ALTROOT}/boot/loader.conf
 		fi
-	fi
-
-	# Update loader.conf file if geli encryption.
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		if [ "${BOOT_MODE}" = 3 ]; then
-			DISKS=${DEVICE_LIST}
-			for DISK in ${DISKS}
-			do
-				echo "geli_${DISK}s1d_keyfile0_load=\"YES\"" >> ${ALTROOT}/boot/loader.conf
-				echo "geli_${DISK}s1d_keyfile0_type=\"${DISK}s1d:geli_keyfile0\"" >> ${ALTROOT}/boot/loader.conf
-				echo "geli_${DISK}s1d_keyfile0_name=\"/boot/encryption.key\"" >> ${ALTROOT}/boot/loader.conf
-			done
-				echo 'zpool_cache_load="YES"' >> ${ALTROOT}/boot/loader.conf
-				echo 'zpool_cache_type="/boot/zfs/zpool.cache"' >> ${ALTROOT}/boot/loader.conf
-				echo 'zpool_cache_name="/boot/zfs/zpool.cache"' >> ${ALTROOT}/boot/loader.conf
-				echo 'geom_eli_passphrase_prompt="YES"' >> ${ALTROOT}/boot/loader.conf
-		fi
-		echo 'aesni_load="YES"' >> ${ALTROOT}/boot/loader.conf
-		echo 'geom_eli_load="YES"' >> ${ALTROOT}/boot/loader.conf
 	fi
 
 	# Generate new rc.conf file.
@@ -701,6 +564,26 @@ copy_media_files()
 	cp -r ${CDPATH}/boot/* ${ALTROOT}/boot/
 	cp -r ${CDPATH}/boot/defaults/* ${ALTROOT}/boot/defaults/
 	cp -r ${CDPATH}/boot/kernel/* ${ALTROOT}/boot/kernel/
+
+	# Copy our boot loader menu files to /boot.
+	if [ -f "${INCLUDE}/menu.4th" ]; then
+		chmod 444 ${INCLUDE}/menu.4th
+		cp -pf ${INCLUDE}/menu.4th ${ALTROOT}/boot
+	fi
+
+	# Generate/update our loader.rc
+	if [ -f "${INCLUDE}/menu.4th" ]; then
+	cat << EOF > ${ALTROOT}/boot/loader.rc
+\ Loader.rc
+include /boot/loader.4th
+start
+initialize
+check-password
+include /boot/beastie.4th
+beastie-start
+EOF
+	fi
+	chmod 444 ${ALTROOT}/boot/loader.rc
 
 	# Decompress kernel.
 	gzip -d -f ${ALTROOT}/boot/kernel/kernel.gz
@@ -856,7 +739,7 @@ menu_swap()
 		SWAP_SIZE="${swap_size}"
 		if [ "${choice}" -ge 2 ]; then
 			cdialog --backtitle "${PRDNAME} ${APPNAME} Installer" --title "System Swap Mode" \
-			--radiolist "Select system Swap mode, (default mirrored)." 10 50 4 \
+			--radiolist "Select system Swap mode, (default is mirrored)." 10 50 4 \
 			1 "Mirrored System Swap" on \
 			2 "Multiple System Swap" off \
 			2>${tmpfile}
@@ -972,44 +855,6 @@ menu_bootmode()
 	BOOT_MODE=$(cat ${tmpfile})
 }
 
-menu_encryption()
-{
-	cdialog --backtitle "${PRDNAME} ${APPNAME} Installer" --title "Encryption option menu" \
-	--checklist "Select the desired items to be encrypted (optional), if you don't know about GELI/Encryption, please disregard this and press Enter to continue." 12 55 8 \
-	"DISK+GELI" "Encrypt Disks?" off \
-	"SWAP+GELI" "Encrypt Swap?" off \
-	2>${tmpfile}
-	if [ 0 -ne $? ]; then
-		exit 0
-	fi
-
-	GELI_MODE=$(cat ${tmpfile})
-
-	if echo ${GELI_MODE} | grep -qw "DISK+GELI"; then
-		GELIPASS1="/tmp/gelipass1.$$"
-		GELIPASS2="/tmp/gelipass2.$$"
-		trap "rm -f ${GELIPASS1} ${GELIPASS2}" 0 1 2 5 15
-
-		# Ask for a password.
-		cdialog --backtitle "${PRDNAME} ${APPNAME} Installer" --title "Encryption option menu" --clear --insecure --passwordbox \
-		"Enter a strong passphrase, used to protect your encryption keys. You will be required to enter this passphrase each time the system is booted." 8 80 \
-		2> ${GELIPASS1}
-
-		# Re-enter password.
-		cdialog --backtitle "${PRDNAME} ${APPNAME} Installer" --title "Encryption option menu" --clear --insecure --passwordbox "Re-enter password." 8 60 \
-		2> ${GELIPASS2}
-
-		# Check passwords.
-		PASS1=$(cat ${GELIPASS1})
-		PASS2=$(cat ${GELIPASS2})
-		if [ "${PASS1}" != "${PASS2}" -o -z "${PASS1}" -o -z "${PASS2}" ]; then
-			rm -f ${GELIPASS1} ${GELIPASS2}
-			cdialog --backtitle "${PRDNAME} ${APPNAME} Installer" --title "Encryption option menu" --msgbox "Passwords do not match." 5 28
-			menu_encryption
-		fi
-	fi
-}
-
 menu_zroot_create()
 {
 	load_kmods
@@ -1018,7 +863,6 @@ menu_zroot_create()
 	menu_zrootsize
 	menu_dataset
 	menu_bootmode
-	menu_encryption
 	install_yesno
 	zroot_init
 }
